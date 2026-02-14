@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0b0b0b" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Nexus Receipt" />
+<title>Nexus Cargo – Receipt</title>
+<style>
+  body{font-family:Arial,sans-serif;padding:20px;background:#f4f4f4;margin:0;}
+  .container{max-width:520px;margin:auto;background:white;padding:20px;border-radius:10px;box-shadow:0 0 10px rgba(0,0,0,0.1);}
+  .header{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+  .logo{width:44px;height:44px;border-radius:10px;object-fit:cover;}
+  .badge{display:inline-block;padding:4px 10px;border-radius:999px;background:#eef2ff;color:#1f2a5a;font-size:12px;font-weight:700;}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #eee;}
+  .k{color:#555;font-size:13px;}
+  .v{font-weight:700;color:#111;text-align:right;word-break:break-word;}
+  .btn{width:100%;padding:12px;background:#007bff;color:white;border:none;border-radius:6px;font-size:16px;cursor:pointer;margin-top:12px;}
+  .btn.secondary{background:#222;}
+  .small{font-size:12px;color:#666;margin-top:10px;line-height:1.4;}
+  a{color:#007bff;}
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="logo.png" class="logo" alt="logo"/>
+      <div>
+        <div style="font-weight:800;font-size:20px;">Nexus Cargo</div>
+        <div style="font-size:12px;color:#666;">Receipt</div>
+      </div>
+    </div>
+
+    <div id="status" class="badge">Loading receipt…</div>
+
+    <div id="content" style="margin-top:12px;display:none;">
+      <div class="row"><div class="k">BL Number</div><div class="v" id="bl"></div></div>
+      <div class="row"><div class="k">Weight (kg)</div><div class="v" id="weight"></div></div>
+      <div class="row"><div class="k">Customer Phone</div><div class="v" id="phone"></div></div>
+      <div class="row"><div class="k">Shipping Type</div><div class="v" id="ship"></div></div>
+      <div class="row"><div class="k">Payment Method</div><div class="v" id="pay"></div></div>
+      <div class="row"><div class="k">Pickup Address</div><div class="v" id="pickup"></div></div>
+      <div class="row"><div class="k">Delivery District</div><div class="v" id="district"></div></div>
+      <div class="row"><div class="k">Street Details</div><div class="v" id="street"></div></div>
+      <div class="row"><div class="k">Package Type</div><div class="v" id="pkg"></div></div>
+      <div class="row"><div class="k">Price (AUD)</div><div class="v" id="price"></div></div>
+      <div class="row"><div class="k">Created</div><div class="v" id="created"></div></div>
+
+      <button class="btn" id="printBtn">Print / Save as PDF</button>
+      <button class="btn secondary" id="copyBtn">Copy details</button>
+
+      <div class="small">
+        Tip: On phone, use <b>Print</b> then choose <b>Save as PDF</b> (or share to WhatsApp).
+        If this link was opened inside WhatsApp, it should still work.
+      </div>
+    </div>
+
+    <div id="error" style="display:none;margin-top:12px;color:#b00020;font-weight:700;">
+      Invalid or missing receipt data.
+    </div>
+  </div>
+
+<script>
+(function(){
+  function decodeData(param){
+    try{
+      var json = decodeURIComponent(escape(atob(param)));
+      return JSON.parse(json);
+    }catch(e){ return null; }
+  }
+
+  var params = new URLSearchParams(location.search);
+  var d = params.get("d");
+  var data = d ? decodeData(d) : null;
+
+  var status = document.getElementById("status");
+  var content = document.getElementById("content");
+  var error = document.getElementById("error");
+
+  if(!data){
+    status.textContent = "No receipt data";
+    status.style.background = "#ffecec";
+    status.style.color = "#7a1a1a";
+    error.style.display = "block";
+    return;
+  }
+
+  function set(id,val){
+    document.getElementById(id).textContent = (val===undefined||val===null||val==="") ? "-" : val;
+  }
+
+  status.textContent = "Receipt ready";
+  content.style.display = "block";
+
+  set("bl", data.blNumber);
+  set("weight", data.weight);
+  set("phone", data.customerPhone);
+  set("ship", data.shippingType);
+  set("pay", data.paymentMethod);
+  set("pickup", data.pickupAddress);
+  set("district", data.deliveryDistrict);
+  set("street", data.deliveryStreet);
+  set("pkg", data.packageType);
+  set("price", data.price);
+  set("created", data.createdAt || new Date().toLocaleString());
+
+  document.getElementById("printBtn").addEventListener("click", function(){
+    window.print();
+  });
+
+  document.getElementById("copyBtn").addEventListener("click", async function(){
+    var text =
+      "BL: " + (data.blNumber||"-") + "\n" +
+      "Weight: " + (data.weight||"-") + "kg\n" +
+      "Phone: " + (data.customerPhone||"-") + "\n" +
+      "Shipping: " + (data.shippingType||"-") + "\n" +
+      "Payment: " + (data.paymentMethod||"-") + "\n" +
+      "Pickup: " + (data.pickupAddress||"-") + "\n" +
+      "District: " + (data.deliveryDistrict||"-") + "\n" +
+      "Street: " + (data.deliveryStreet||"-") + "\n" +
+      "Package: " + (data.packageType||"-") + "\n" +
+      "Price: $" + (data.price||"-") + " AUD\n" +
+      "Created: " + (data.createdAt||"-");
+
+    try{
+      await navigator.clipboard.writeText(text);
+      alert("Copied!");
+    }catch(e){
+      prompt("Copy this:", text);
+    }
+  });
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./service-worker.js").catch(function(){});
+  }
+})();
+</script>
+</body>
+</html>
