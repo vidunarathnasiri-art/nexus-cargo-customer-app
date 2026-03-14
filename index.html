@@ -89,8 +89,8 @@ When you click <b>Pay Now</b>, you will be taken to a secure Stripe checkout pag
 
 <label>Package Type:</label>
 <select id="packageType">
-<option value="full">Full (up to 35kg)</option>
-<option value="half">Half (up to 17kg)</option>
+<option value="full">Full (up to 35kg, +$2/kg after 35)</option>
+<option value="half">Half (up to 17kg, +$2/kg after 17)</option>
 </select>
 
 <label>Street Details:</label>
@@ -117,6 +117,15 @@ document.getElementById("pickupBox").style.display=(ship==="pickup"||ship==="pic
 document.getElementById("deliveryBox").style.display=(ship==="door"||ship==="pickup")?"block":"none";
 }
 
+function syncPackageTypeWithWeight(){
+var w=parseFloat(document.getElementById("weight").value);
+var pkgEl=document.getElementById("packageType");
+if(!pkgEl) return;
+if(!isNaN(w) && w>=35){
+  pkgEl.value="full";
+}
+}
+
 function updateBank(){
 var isBank=document.getElementById("paymentMethod").value==="bank";
 document.getElementById("bankDetails").style.display=isBank?"block":"none";
@@ -125,7 +134,8 @@ document.getElementById("payNowBtn").style.display=isBank?"block":"none";
 
 document.getElementById("shippingType").addEventListener("change",updateUI);
 document.getElementById("paymentMethod").addEventListener("change",updateBank);
-updateUI();updateBank();
+document.getElementById("weight").addEventListener("input",syncPackageTypeWithWeight);
+updateUI();updateBank();syncPackageTypeWithWeight();
 
 
 function calculatePrice(){
@@ -137,10 +147,16 @@ var district=document.getElementById("deliveryDistrict").value;
 if(!w||w<=0){alert("Enter weight");return;}
 
 if(pkg==="half"){
-if(w>17){alert("Half only up to 17kg");return;}
-var p=HALF_FIXED[ship];
-document.getElementById("price").textContent="Price: $"+p+" AUD";
-return p;
+var halfBase=HALF_FIXED[ship];
+var halfExtra=w>17?(w-17)*2:0;
+var p=halfBase+halfExtra;
+if(w>=35){
+  document.getElementById("packageType").value="full";
+  pkg="full";
+}else{
+  document.getElementById("price").textContent="Price: $"+p.toFixed(2)+" AUD";
+  return p;
+}
 }
 
 var base=80;
