@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nexus-cargo-customer",
+  "compatibility_date": "2026-03-14",
+  "pages_build_output_dir": ".",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nexus-cargo-db",
+      "database_id": "PUT_YOUR_D1_DATABASE_ID_HERE"
+    }
+  ],
+  "vars": {
+    "PUBLIC_APP_URL": "https://YOUR-PAGES-DOMAIN.pages.dev"
+  }
+}

@@ -42,10 +42,8 @@ button{width:100%;padding:12px;background:#007bff;color:white;border:none;border
 
 
 <label>BL Number:</label>
-<div style="display:flex;gap:10px;align-items:center;">
-  <input type="text" id="blNumber" readonly placeholder="Click Generate" style="flex:1;margin:8px 0;" />
-  <button type="button" id="genBLBtn" style="width:auto;white-space:nowrap;">Generate BL</button>
-</div>
+<input type="text" id="blNumber" readonly placeholder="Auto generating..." />
+<div style="font-size:12px;color:#666;margin-top:-2px;margin-bottom:8px;">Generated automatically and added to the receipt.</div>
 <label>Shipping Type:</label>
 <select id="shippingType">
 <option value="door">Door to Door</option>
@@ -61,12 +59,11 @@ button{width:100%;padding:12px;background:#007bff;color:white;border:none;border
 </select>
 
 <div id="bankDetails" style="display:none;padding:10px;border:1px solid #ddd;border-radius:8px;background:#fafafa;">
-<b>Bank Details</b><br>
-Account Name: Nexus Cargo<br>
-BSB: 000-000<br>
-Account No: 00000000<br>
-<span style="color:#666;">(Please transfer the necessary amount to this account no.)</span>
+<b>Bank Payment</b><br>
+When you click <b>Pay Now</b>, you will be taken to a secure Stripe checkout page to complete payment.
+<div style="font-size:12px;color:#666;margin-top:6px;">For live payments, set your Stripe secret key in Cloudflare and use AUD pricing.</div>
 </div>
+<button type="button" id="payNowBtn" style="display:none;margin-top:10px;background:#28a745;">Pay Now</button>
 
 <div id="pickupBox" style="display:none;">
 <label>Pickup Address:</label>
@@ -102,7 +99,7 @@ Account No: 00000000<br>
 
 <button onclick="calculatePrice()">Calculate Price</button>
 <div class="result" id="price">Price: $0 AUD</div>
-<button onclick="sendWhatsApp()">Send via WhatsApp</button>
+<button id="sendWhatsAppBtn" onclick="sendWhatsApp()">Send via WhatsApp</button>
 <a id="receiptLink" href="#" style="display:none;margin-top:10px;display:block;text-align:center;font-weight:700;">Open Receipt Link</a>
 
 </div>
@@ -121,7 +118,9 @@ document.getElementById("deliveryBox").style.display=(ship==="door"||ship==="pic
 }
 
 function updateBank(){
-document.getElementById("bankDetails").style.display=(document.getElementById("paymentMethod").value==="bank")?"block":"none";
+var isBank=document.getElementById("paymentMethod").value==="bank";
+document.getElementById("bankDetails").style.display=isBank?"block":"none";
+document.getElementById("payNowBtn").style.display=isBank?"block":"none";
 }
 
 document.getElementById("shippingType").addEventListener("change",updateUI);
@@ -158,30 +157,75 @@ return price;
 
 function pad4(n){n=String(n);while(n.length<4)n="0"+n;return n;}
 
+var blPromise=null;
+
 async function fetchNextBL(){
-  // Calls Cloudflare Pages Function at /api/next-bl (same domain)
-  const res = await fetch("./api/next-bl", { method: "POST" });
-  if(!res.ok) throw new Error("BL service error");
+  const res = await fetch("/api/next-bl", { method: "POST" });
   const data = await res.json();
+  if(!res.ok || !data.blNumber){
+    throw new Error(data.detail || data.error || "BL service error");
+  }
   return data.blNumber || data.bl || data;
 }
 
 async function ensureBL(){
   var el=document.getElementById("blNumber");
   if(el && el.value) return el.value;
-  const bl = await fetchNextBL();
-  if(el) el.value = bl;
-  return bl;
+  if(!blPromise){
+    blPromise = fetchNextBL().then(function(bl){
+      if(el) el.value = bl;
+      return bl;
+    }).catch(function(err){
+      blPromise = null;
+      throw err;
+    });
+  }
+  return blPromise;
 }
 
-document.getElementById("genBLBtn").addEventListener("click", async function(){
-  try{
-    const bl = await fetchNextBL();
-    document.getElementById("blNumber").value = bl;
-  }catch(e){
-    alert("Could not generate BL number. Please try again.");
-  }
+ensureBL().catch(function(e){
+  var el=document.getElementById("blNumber");
+  if(el) el.placeholder = "Auto generation failed";
+  console.error("Could not generate BL number", e);
 });
+
+async function startBankPayment(){
+var amount=calculatePrice();
+if(!amount)return;
+
+try{
+  var bl=await ensureBL();
+  var payload={
+    amount: amount,
+    blNumber: bl,
+    weight: document.getElementById("weight").value,
+    customerPhone: document.getElementById("customerPhone").value,
+    shippingType: document.getElementById("shippingType").value,
+    paymentMethod: document.getElementById("paymentMethod").value,
+    pickupAddress: document.getElementById("pickupAddress").value,
+    deliveryDistrict: document.getElementById("deliveryDistrict").value,
+    deliveryStreet: document.getElementById("deliveryStreet").value,
+    packageType: document.getElementById("packageType").value
+  };
+
+  const res=await fetch("/api/create-checkout-session", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify(payload)
+  });
+
+  const data=await res.json();
+  if(!res.ok || !data.url){
+    throw new Error(data.detail || data.error || "Could not start payment");
+  }
+
+  location.href=data.url;
+}catch(e){
+  alert("Payment start failed. " + (e.message || "Please try again."));
+}
+}
+
+document.getElementById("payNowBtn").addEventListener("click", startBankPayment);
 
 function encodeData(obj){
   try{
@@ -190,8 +234,15 @@ function encodeData(obj){
 }
 
 async function sendWhatsApp(){
+var sendBtn = document.getElementById("sendWhatsAppBtn");
+if(sendBtn){ sendBtn.disabled = true; sendBtn.textContent = "Preparing..."; }
+
+try{
 var price=calculatePrice();
-if(!price)return;
+if(!price){
+  if(sendBtn){ sendBtn.disabled = false; sendBtn.textContent = "Send via WhatsApp"; }
+  return;
+}
 
 var bl=await ensureBL();
 var details={
@@ -232,6 +283,11 @@ msg+="Price: $"+price+" AUD\n\n";
 msg+="Receipt link (open to view + print/save PDF):\n"+receiptUrl;
 
 window.open("https://wa.me/"+BUSINESS_NUMBER+"?text="+encodeURIComponent(msg));
+} catch(e){
+  alert("Could not prepare WhatsApp receipt. " + (e.message || "Please try again."));
+} finally {
+  if(sendBtn){ sendBtn.disabled = false; sendBtn.textContent = "Send via WhatsApp"; }
+}
 }
 </script>
 
