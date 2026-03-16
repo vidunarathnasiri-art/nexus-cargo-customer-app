@@ -42,8 +42,10 @@ button{width:100%;padding:12px;background:#007bff;color:white;border:none;border
 
 
 <label>BL Number:</label>
-<input type="text" id="blNumber" readonly placeholder="Auto generating..." />
-<div style="font-size:12px;color:#666;margin-top:-2px;margin-bottom:8px;">Generated automatically and added to the receipt.</div>
+<div style="display:flex;gap:10px;align-items:center;">
+  <input type="text" id="blNumber" readonly placeholder="Click Generate" style="flex:1;margin:8px 0;" />
+  <button type="button" id="genBLBtn" style="width:auto;white-space:nowrap;">Generate BL</button>
+</div>
 <label>Shipping Type:</label>
 <select id="shippingType">
 <option value="door">Door to Door</option>
@@ -89,8 +91,8 @@ When you click <b>Pay Now</b>, you will be taken to a secure Stripe checkout pag
 
 <label>Package Type:</label>
 <select id="packageType">
-<option value="full">Full (up to 35kg, +$2/kg after 35)</option>
-<option value="half">Half (up to 17kg, +$2/kg after 17)</option>
+<option value="full">Full (up to 35kg)</option>
+<option value="half">Half (up to 17kg)</option>
 </select>
 
 <label>Street Details:</label>
@@ -99,7 +101,7 @@ When you click <b>Pay Now</b>, you will be taken to a secure Stripe checkout pag
 
 <button onclick="calculatePrice()">Calculate Price</button>
 <div class="result" id="price">Price: $0 AUD</div>
-<button id="sendWhatsAppBtn" onclick="sendWhatsApp()">Send via WhatsApp</button>
+<button onclick="sendWhatsApp()">Send via WhatsApp</button>
 <a id="receiptLink" href="#" style="display:none;margin-top:10px;display:block;text-align:center;font-weight:700;">Open Receipt Link</a>
 
 </div>
@@ -117,15 +119,6 @@ document.getElementById("pickupBox").style.display=(ship==="pickup"||ship==="pic
 document.getElementById("deliveryBox").style.display=(ship==="door"||ship==="pickup")?"block":"none";
 }
 
-function syncPackageTypeWithWeight(){
-var w=parseFloat(document.getElementById("weight").value);
-var pkgEl=document.getElementById("packageType");
-if(!pkgEl) return;
-if(!isNaN(w) && w>=35){
-  pkgEl.value="full";
-}
-}
-
 function updateBank(){
 var isBank=document.getElementById("paymentMethod").value==="bank";
 document.getElementById("bankDetails").style.display=isBank?"block":"none";
@@ -134,8 +127,7 @@ document.getElementById("payNowBtn").style.display=isBank?"block":"none";
 
 document.getElementById("shippingType").addEventListener("change",updateUI);
 document.getElementById("paymentMethod").addEventListener("change",updateBank);
-document.getElementById("weight").addEventListener("input",syncPackageTypeWithWeight);
-updateUI();updateBank();syncPackageTypeWithWeight();
+updateUI();updateBank();
 
 
 function calculatePrice(){
@@ -147,16 +139,10 @@ var district=document.getElementById("deliveryDistrict").value;
 if(!w||w<=0){alert("Enter weight");return;}
 
 if(pkg==="half"){
-var halfBase=HALF_FIXED[ship];
-var halfExtra=w>17?(w-17)*2:0;
-var p=halfBase+halfExtra;
-if(w>=35){
-  document.getElementById("packageType").value="full";
-  pkg="full";
-}else{
-  document.getElementById("price").textContent="Price: $"+p.toFixed(2)+" AUD";
-  return p;
-}
+if(w>17){alert("Half only up to 17kg");return;}
+var p=HALF_FIXED[ship];
+document.getElementById("price").textContent="Price: $"+p+" AUD";
+return p;
 }
 
 var base=80;
@@ -173,9 +159,8 @@ return price;
 
 function pad4(n){n=String(n);while(n.length<4)n="0"+n;return n;}
 
-var blPromise=null;
-
 async function fetchNextBL(){
+  // Calls Cloudflare Pages Function at /api/next-bl (same domain)
   const res = await fetch("/api/next-bl", { method: "POST" });
   const data = await res.json();
   if(!res.ok || !data.blNumber){
@@ -187,23 +172,21 @@ async function fetchNextBL(){
 async function ensureBL(){
   var el=document.getElementById("blNumber");
   if(el && el.value) return el.value;
-  if(!blPromise){
-    blPromise = fetchNextBL().then(function(bl){
-      if(el) el.value = bl;
-      return bl;
-    }).catch(function(err){
-      blPromise = null;
-      throw err;
-    });
-  }
-  return blPromise;
+  const bl = await fetchNextBL();
+  if(el) el.value = bl;
+  return bl;
 }
 
-ensureBL().catch(function(e){
-  var el=document.getElementById("blNumber");
-  if(el) el.placeholder = "Auto generation failed";
-  console.error("Could not generate BL number", e);
+document.getElementById("genBLBtn").addEventListener("click", async function(){
+  try{
+    const bl = await fetchNextBL();
+    document.getElementById("blNumber").value = bl;
+  }catch(e){
+    alert("Could not generate BL number. " + (e.message || "Please try again."));
+  }
 });
+
+
 
 async function startBankPayment(){
 var amount=calculatePrice();
@@ -250,15 +233,8 @@ function encodeData(obj){
 }
 
 async function sendWhatsApp(){
-var sendBtn = document.getElementById("sendWhatsAppBtn");
-if(sendBtn){ sendBtn.disabled = true; sendBtn.textContent = "Preparing..."; }
-
-try{
 var price=calculatePrice();
-if(!price){
-  if(sendBtn){ sendBtn.disabled = false; sendBtn.textContent = "Send via WhatsApp"; }
-  return;
-}
+if(!price)return;
 
 var bl=await ensureBL();
 var details={
@@ -299,11 +275,6 @@ msg+="Price: $"+price+" AUD\n\n";
 msg+="Receipt link (open to view + print/save PDF):\n"+receiptUrl;
 
 window.open("https://wa.me/"+BUSINESS_NUMBER+"?text="+encodeURIComponent(msg));
-} catch(e){
-  alert("Could not prepare WhatsApp receipt. " + (e.message || "Please try again."));
-} finally {
-  if(sendBtn){ sendBtn.disabled = false; sendBtn.textContent = "Send via WhatsApp"; }
-}
 }
 </script>
 
