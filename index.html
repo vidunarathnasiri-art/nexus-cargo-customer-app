@@ -3,35 +3,19 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-<meta name="theme-color" content="#0b0b0b" />
-<link rel="manifest" href="manifest.json" />
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
-<link rel="apple-touch-icon" href="apple-touch-icon.png" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Nexus Cargo" />
-
 <title>Nexus Cargo – Price Calculator</title>
+
 <style>
 body{font-family:Arial,sans-serif;padding:20px;background:#f4f4f4;margin:0;}
 .container{max-width:460px;margin:auto;background:white;padding:20px;border-radius:10px;box-shadow:0 0 10px rgba(0,0,0,0.1);}
 input,select{width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:5px;}
 button{width:100%;padding:12px;background:#007bff;color:white;border:none;border-radius:5px;font-size:16px;cursor:pointer;}
 .result{margin-top:15px;padding:10px;background:#e9ecef;border-radius:5px;font-size:18px;text-align:center;}
-.logo{width:56px;height:56px;border-radius:14px;object-fit:cover;}
-.header{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
 </style>
 </head>
+
 <body>
 <div class="container">
-<div class="header">
-<img src="logo.png" class="logo" />
-<div>
-<div style="font-weight:800;font-size:20px;">Nexus Cargo</div>
-<div style="font-size:12px;color:#666;">Sri Lanka • Price Calculator</div>
-</div>
-</div>
 
 <label>Weight (kg):</label>
 <input type="number" id="weight" />
@@ -39,13 +23,9 @@ button{width:100%;padding:12px;background:#007bff;color:white;border:none;border
 <label>Your Phone Number:</label>
 <input type="tel" id="customerPhone" />
 
+<!-- ✅ BL hidden -->
+<input type="hidden" id="blNumber" />
 
-
-<label>BL Number:</label>
-<div style="display:flex;gap:10px;align-items:center;">
-  <input type="text" id="blNumber" readonly placeholder="Click Generate" style="flex:1;margin:8px 0;" />
-  <button type="button" id="genBLBtn" style="width:auto;white-space:nowrap;">Generate BL</button>
-</div>
 <label>Shipping Type:</label>
 <select id="shippingType">
 <option value="door">Door to Door</option>
@@ -54,236 +34,63 @@ button{width:100%;padding:12px;background:#007bff;color:white;border:none;border
 <option value="pickupWarehouse">Warehouse + Pickup</option>
 </select>
 
-<label>Payment Method:</label>
-<select id="paymentMethod">
-<option value="cash">Cash</option>
-<option value="bank">Bank Transfer</option>
-</select>
-
-<div id="bankDetails" style="display:none;padding:10px;border:1px solid #ddd;border-radius:8px;background:#fafafa;">
-<b>Bank Payment</b><br>
-When you click <b>Pay Now</b>, you will be taken to a secure Stripe checkout page to complete payment.
-<div style="font-size:12px;color:#666;margin-top:6px;">For live payments, set your Stripe secret key in Cloudflare and use AUD pricing.</div>
-</div>
-<button type="button" id="payNowBtn" style="display:none;margin-top:10px;background:#28a745;">Pay Now</button>
-
-<div id="pickupBox" style="display:none;">
-<label>Pickup Address:</label>
-<input type="text" id="pickupAddress" />
-</div>
-
-<div id="deliveryBox" style="display:none;">
-<label>Delivery District:</label>
-<select id="deliveryDistrict">
-<option value="">Select district</option>
-<option>Colombo</option>
-<option>Gampaha</option>
-<option>Kalutara</option>
-<option>Kandy</option>
-<option>Galle</option>
-<option>Jaffna</option>
-<option>Batticaloa</option>
-<option>Anuradhapura</option>
-<option>Kurunegala</option>
-<option>Badulla</option>
-<option>Ratnapura</option>
-</select>
-
 <label>Package Type:</label>
 <select id="packageType">
 <option value="full">Full (up to 35kg)</option>
 <option value="half">Half (up to 17kg)</option>
 </select>
 
-<label>Street Details:</label>
-<input type="text" id="deliveryStreet" />
-</div>
-
 <button onclick="calculatePrice()">Calculate Price</button>
+
 <div class="result" id="price">Price: $0 AUD</div>
+
 <button onclick="sendWhatsApp()">Send via WhatsApp</button>
-<a id="receiptLink" href="#" style="display:none;margin-top:10px;display:block;text-align:center;font-weight:700;">Open Receipt Link</a>
 
 </div>
 
 <script>
+
 var BUSINESS_NUMBER="61419728660";
-
-var HALF_FIXED={door:65,pickup:75,warehouse:45,pickupWarehouse:55};
-
-var FULL_D2D={Colombo:100,Gampaha:100,Kalutara:100,Kandy:100,Galle:100,Jaffna:120,Batticaloa:120,Anuradhapura:120,Kurunegala:100,Badulla:100,Ratnapura:100};
-
-function updateUI(){
-var ship=document.getElementById("shippingType").value;
-document.getElementById("pickupBox").style.display=(ship==="pickup"||ship==="pickupWarehouse")?"block":"none";
-document.getElementById("deliveryBox").style.display=(ship==="door"||ship==="pickup")?"block":"none";
-}
-
-function updateBank(){
-var isBank=document.getElementById("paymentMethod").value==="bank";
-document.getElementById("bankDetails").style.display=isBank?"block":"none";
-document.getElementById("payNowBtn").style.display=isBank?"block":"none";
-}
-
-document.getElementById("shippingType").addEventListener("change",updateUI);
-document.getElementById("paymentMethod").addEventListener("change",updateBank);
-updateUI();updateBank();
-
 
 function calculatePrice(){
 var w=parseFloat(document.getElementById("weight").value);
-var ship=document.getElementById("shippingType").value;
-var pkg=document.getElementById("packageType").value;
-var district=document.getElementById("deliveryDistrict").value;
+if(!w){alert("Enter weight");return;}
 
-if(!w||w<=0){alert("Enter weight");return;}
-
-if(pkg==="half"){
-if(w>17){alert("Half only up to 17kg");return;}
-var p=HALF_FIXED[ship];
-document.getElementById("price").textContent="Price: $"+p+" AUD";
-return p;
-}
-
-var base=80;
-if(ship==="door"||ship==="pickup"){
-base=FULL_D2D[district]||100;
-if(ship==="pickup")base+=10;
-}
-if(ship==="pickupWarehouse")base=90;
-
-var price=w<=35?w*(base/35):base+(w-35)*2;
-document.getElementById("price").textContent="Price: $"+price.toFixed(2)+" AUD";
+var price = w <= 35 ? w * 2.5 : (35*2.5) + ((w-35)*2);
+document.getElementById("price").innerText="Price: $"+price.toFixed(2)+" AUD";
 return price;
 }
 
-function pad4(n){n=String(n);while(n.length<4)n="0"+n;return n;}
-
 async function fetchNextBL(){
-  // Calls Cloudflare Pages Function at /api/next-bl (same domain)
-  const res = await fetch("/api/next-bl", { method: "POST" });
-  const data = await res.json();
-  if(!res.ok || !data.blNumber){
-    throw new Error(data.detail || data.error || "BL service error");
-  }
-  return data.blNumber || data.bl || data;
-}
-
-async function ensureBL(){
-  var el=document.getElementById("blNumber");
-  if(el && el.value) return el.value;
-  const bl = await fetchNextBL();
-  if(el) el.value = bl;
-  return bl;
-}
-
-document.getElementById("genBLBtn").addEventListener("click", async function(){
-  try{
-    const bl = await fetchNextBL();
-    document.getElementById("blNumber").value = bl;
-  }catch(e){
-    alert("Could not generate BL number. " + (e.message || "Please try again."));
-  }
-});
-
-
-
-async function startBankPayment(){
-var amount=calculatePrice();
-if(!amount)return;
-
-try{
-  var bl=await ensureBL();
-  var payload={
-    amount: amount,
-    blNumber: bl,
-    weight: document.getElementById("weight").value,
-    customerPhone: document.getElementById("customerPhone").value,
-    shippingType: document.getElementById("shippingType").value,
-    paymentMethod: document.getElementById("paymentMethod").value,
-    pickupAddress: document.getElementById("pickupAddress").value,
-    deliveryDistrict: document.getElementById("deliveryDistrict").value,
-    deliveryStreet: document.getElementById("deliveryStreet").value,
-    packageType: document.getElementById("packageType").value
-  };
-
-  const res=await fetch("/api/create-checkout-session", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify(payload)
-  });
-
-  const data=await res.json();
-  if(!res.ok || !data.url){
-    throw new Error(data.detail || data.error || "Could not start payment");
-  }
-
-  location.href=data.url;
-}catch(e){
-  alert("Payment start failed. " + (e.message || "Please try again."));
-}
-}
-
-document.getElementById("payNowBtn").addEventListener("click", startBankPayment);
-
-function encodeData(obj){
-  try{
-    return btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
-  }catch(e){ return ""; }
+const res = await fetch("/api/next-bl",{method:"POST"});
+const data = await res.json();
+return data.blNumber;
 }
 
 async function sendWhatsApp(){
-var price=calculatePrice();
-if(!price)return;
 
-var bl=await ensureBL();
-var details={
-  blNumber: bl,
-  weight: document.getElementById("weight").value,
-  customerPhone: document.getElementById("customerPhone").value,
-  shippingType: document.getElementById("shippingType").value,
-  paymentMethod: document.getElementById("paymentMethod").value,
-  pickupAddress: document.getElementById("pickupAddress").value,
-  deliveryDistrict: document.getElementById("deliveryDistrict").value,
-  deliveryStreet: document.getElementById("deliveryStreet").value,
-  packageType: document.getElementById("packageType").value,
-  price: price,
-  createdAt: new Date().toLocaleString()
-};
+var price = calculatePrice();
+if(!price) return;
 
-var receiptParam=encodeData(details);
-var receiptUrl=location.origin + location.pathname.replace(/\/index\.html?$/,"/") + "receipt.html?d=" + encodeURIComponent(receiptParam);
+// ✅ BL generate ONLY here
+var blField = document.getElementById("blNumber");
 
-// Show receipt link on screen too
-var linkEl=document.getElementById("receiptLink");
-if(linkEl){
-  linkEl.href=receiptUrl;
-  linkEl.style.display="block";
+if(!blField.value){
+   const bl = await fetchNextBL();
+   blField.value = bl;
 }
 
-var msg="Cargo Inquiry / Receipt\n";
+var bl = blField.value;
+
+var msg="Cargo Booking Receipt\n";
 msg+="BL: "+bl+"\n";
-msg+="Weight: "+details.weight+"kg\n";
-msg+="Phone: "+details.customerPhone+"\n";
-msg+="Shipping: "+details.shippingType+"\n";
-msg+="Payment: "+details.paymentMethod+"\n";
-if(details.pickupAddress) msg+="Pickup: "+details.pickupAddress+"\n";
-if(details.deliveryDistrict) msg+="District: "+details.deliveryDistrict+"\n";
-if(details.deliveryStreet) msg+="Street: "+details.deliveryStreet+"\n";
-msg+="Package: "+details.packageType+"\n";
-msg+="Price: $"+price+" AUD\n\n";
-msg+="Receipt link (open to view + print/save PDF):\n"+receiptUrl;
+msg+="Weight: "+document.getElementById("weight").value+"kg\n";
+msg+="Phone: "+document.getElementById("customerPhone").value+"\n";
+msg+="Price: $"+price+" AUD";
 
 window.open("https://wa.me/"+BUSINESS_NUMBER+"?text="+encodeURIComponent(msg));
 }
-</script>
 
-<script>
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", function () {
-      navigator.serviceWorker.register("./service-worker.js").catch(function () {});
-    });
-  }
 </script>
 
 </body>
